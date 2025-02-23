@@ -13,6 +13,7 @@ A fun and customizable Snake game plugin for Obsidian. Take a break from your no
   - Theme following toggle
   - Custom snake and food colors
   - Adjustable game speed
+  - Toggle animations for classic grid-based movement
 - 🏆 High score tracking
 - ⏸️ Pause functionality (ESC key)
 - 📱 Responsive design that adapts to window size
@@ -38,10 +39,13 @@ A fun and customizable Snake game plugin for Obsidian. Take a break from your no
 
 You can customize the game through the plugin settings:
 
+- **Enable Animations**: Toggle between smooth animations and classic grid-based movement
 - **Follow Theme Colors**: Toggle whether the game should use Obsidian's theme colors
 - **Snake Color**: Set a custom color for the snake (when not following theme)
 - **Food Color**: Set a custom color for the food (when not following theme)
 - **Initial Game Speed**: Adjust the starting speed of the game
+- **Grid Size**: Adjust the size of the game grid
+- **Speed Increase**: Control how much faster the game gets when collecting food
 
 ## Hotkeys
 

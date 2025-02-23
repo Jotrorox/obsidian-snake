@@ -8,16 +8,18 @@ interface SnakePluginSettings {
 	followTheme: boolean;
 	gridSize: number;
 	speedIncrease: number;
+	enableAnimations: boolean;
 }
 
 const DEFAULT_SETTINGS: SnakePluginSettings = {
 	highScore: 0,
-	snakeColor: '#4CAF50',  // Default green color
-	foodColor: '#FF5722',   // Default orange color
+	snakeColor: '#4CAF50',
+	foodColor: '#FF5722',
 	gameSpeed: 150,
 	followTheme: true,
-	gridSize: 20,          // Default grid size
-	speedIncrease: 2       // Speed increase per food
+	gridSize: 20,
+	speedIncrease: 2,
+	enableAnimations: false
 }
 
 export default class SnakePlugin extends Plugin {
@@ -65,6 +67,16 @@ class SnakeSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+
+		new Setting(containerEl)
+			.setName('Enable Animations (experimental)')
+			.setDesc('Toggle smooth animations (disable for classic grid-based movement)')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableAnimations)
+				.onChange(async (value) => {
+					this.plugin.settings.enableAnimations = value;
+					await this.plugin.saveSettings();
+				}));
 
 		new Setting(containerEl)
 			.setName('Follow Theme Colors')
@@ -477,8 +489,9 @@ class SnakeGameModal extends Modal {
 			this.updateGameState(currentTime);
 		}
 
-		// Calculate animation progress
-		const progress = Math.min(timeSinceLastMove / this.moveInterval, 1);
+		// Calculate animation progress only if animations are enabled
+		const progress = this.plugin.settings.enableAnimations ? 
+			Math.min(timeSinceLastMove / this.moveInterval, 1) : 1;
 
 		// Clear canvas
 		this.ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--background-primary');
@@ -489,18 +502,16 @@ class SnakeGameModal extends Modal {
 		this.ctx.lineWidth = 0.5;
 		this.ctx.globalAlpha = 0.2;
 		
-		// Draw vertical grid lines
+		// Draw grid lines
 		for (let i = 0; i <= this.plugin.settings.gridSize; i++) {
 			const x = i * this.gridSize;
+			const y = i * this.gridSize;
+			
 			this.ctx.beginPath();
 			this.ctx.moveTo(x, 0);
 			this.ctx.lineTo(x, this.canvas.height);
 			this.ctx.stroke();
-		}
-		
-		// Draw horizontal grid lines
-		for (let i = 0; i <= this.plugin.settings.gridSize; i++) {
-			const y = i * this.gridSize;
+			
 			this.ctx.beginPath();
 			this.ctx.moveTo(0, y);
 			this.ctx.lineTo(this.canvas.width, y);
@@ -509,54 +520,79 @@ class SnakeGameModal extends Modal {
 		
 		this.ctx.globalAlpha = 1;
 
-		// Draw snake with interpolation
+		// Draw snake
 		const snakeColor = this.plugin.settings.followTheme 
 			? getComputedStyle(document.body).getPropertyValue('--interactive-accent')
 			: this.plugin.settings.snakeColor;
 		this.ctx.fillStyle = snakeColor;
-		
-		this.snake.forEach((segment, index) => {
-			let x = segment.x * this.gridSize;
-			let y = segment.y * this.gridSize;
 
-			if (index === 0 && segment.actualX !== undefined && segment.actualY !== undefined) {
-				x = segment.actualX + (segment.x * this.gridSize - segment.actualX) * progress;
-				y = segment.actualY + (segment.y * this.gridSize - segment.actualY) * progress;
+		if (this.plugin.settings.enableAnimations) {
+			// Draw snake body with interpolation
+			for (let i = this.snake.length - 1; i > 0; i--) {
+				const segment = this.snake[i];
+				let x = segment.x * this.gridSize;
+				let y = segment.y * this.gridSize;
+
+				if (segment.actualX !== undefined && segment.actualY !== undefined) {
+					x = segment.actualX + (segment.x * this.gridSize - segment.actualX) * progress;
+					y = segment.actualY + (segment.y * this.gridSize - segment.actualY) * progress;
+				}
+
+				this.drawSnakeSegment(x, y);
 			}
 
-			// Draw snake segment with rounded corners
-			this.ctx.beginPath();
-			this.ctx.roundRect(
-				x + 1,
-				y + 1,
-				this.gridSize - 2,
-				this.gridSize - 2,
-				Math.min(4, this.gridSize / 4) // Adjust corner radius based on grid size
-			);
-			this.ctx.fill();
-		});
+			// Draw head without interpolation
+			const head = this.snake[0];
+			this.drawSnakeSegment(head.x * this.gridSize, head.y * this.gridSize);
+		} else {
+			// Draw snake without animations
+			this.snake.forEach(segment => {
+				this.drawSnakeSegment(segment.x * this.gridSize, segment.y * this.gridSize);
+			});
+		}
 
-		// Draw food with pulsing animation
+		// Draw food
 		const foodColor = this.plugin.settings.followTheme
 			? getComputedStyle(document.body).getPropertyValue('--text-accent')
 			: this.plugin.settings.foodColor;
 		this.ctx.fillStyle = foodColor;
-		const foodSize = this.gridSize - 2 + Math.sin(currentTime / 200) * Math.min(4, this.gridSize / 5);
 
-		// Draw food as a circle
-		this.ctx.beginPath();
-		this.ctx.arc(
-			this.food.x * this.gridSize + this.gridSize/2,
-			this.food.y * this.gridSize + this.gridSize/2,
-			foodSize/2,
-			0,
-			Math.PI * 2
-		);
-		this.ctx.fill();
+		if (this.plugin.settings.enableAnimations) {
+			// Draw food with pulsing animation
+			const foodSize = this.gridSize - 2 + Math.sin(currentTime / 200) * Math.min(4, this.gridSize / 5);
+			this.drawFood(foodSize);
+		} else {
+			// Draw food without animation
+			this.drawFood(this.gridSize - 2);
+		}
 
 		if (!this.gameOver && !this.isPaused) {
 			this.animationFrame = requestAnimationFrame(this.animate);
 		}
+	}
+
+	private drawSnakeSegment(x: number, y: number) {
+		this.ctx.beginPath();
+		this.ctx.roundRect(
+			x + 1,
+			y + 1,
+			this.gridSize - 2,
+			this.gridSize - 2,
+			Math.min(4, this.gridSize / 4)
+		);
+		this.ctx.fill();
+	}
+
+	private drawFood(size: number) {
+		this.ctx.beginPath();
+		this.ctx.arc(
+			this.food.x * this.gridSize + this.gridSize/2,
+			this.food.y * this.gridSize + this.gridSize/2,
+			size/2,
+			0,
+			Math.PI * 2
+		);
+		this.ctx.fill();
 	}
 
 	private generateFood(): { x: number, y: number } {
